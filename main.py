@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Path , HTTPException, Query
 import json
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel , Field , computed_field
 from typing import Annotated ,Literal
 
@@ -29,7 +30,7 @@ class Patient(BaseModel):
         elif self.bmi < 25:
             return "Normal"
         elif self.bmi < 30:
-            return "Normal"
+            return "Overweight"
         else:
             return "obese"
 
@@ -38,6 +39,10 @@ def data_load():
         data = json.load(f)
 
     return data
+
+def save_data(data):
+    with open("patients.json","w") as f:
+        json.dump(data,f)
 
 @app.get("/")
 def hello():
@@ -71,7 +76,7 @@ def sort_patients(sort_by:str = Query(...,description = "sort on the basis of he
     valid_feilds = ["height","weight","bmi"]
 
     if sort_by not in valid_feilds:
-        raise HTTPException(status_code=400,detail ="invalid feild select from {valid_feilds}" )
+        raise HTTPException(status_code=400,detail =f"invalid feild select from {valid_feilds}" )
 
     if order not in ["asc","desc"]:
         raise HTTPException(status_code=400,detail = "Invalid order select between asc and desc ")
@@ -83,3 +88,24 @@ def sort_patients(sort_by:str = Query(...,description = "sort on the basis of he
     sorted_data = sorted(data.values(),key = lambda x: x.get(sort_by,0),reverse = sort_order)
 
     return sorted_data
+
+
+@app.post("/create")
+def create_patient(patient : Patient): # pateint is varibale whic stores the new patient data and Patient is its data type which is a Pydantic class
+
+    # load_existing data
+    data = data_load()
+
+    # check if the patient already exists
+    if patient.id in data:
+        raise HTTPException(status_code=400,detail = "Patient already in existense")
+
+    # add new patient into the db
+    # we have to convert the data into python dict for that we use model_dump(),it converts the data into dict
+    data[patient.id] = patient.model_dump()
+
+    # save the data into json file
+
+    save_data(data) # calling the save data func
+
+    return JSONResponse(content = "Patient added succesfull",status_code=201)
